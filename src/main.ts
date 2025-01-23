@@ -1,12 +1,32 @@
-import { CaffeineManager } from './CaffeineManager'
-import { metricSchema } from './schema'
+import { Registry } from 'prom-client'
 
-const data = metricSchema.array().parse([])
+import MetricsManager from './MetricsManager'
+import DietaryCaffeineMetricManager from './metrics/dietary_caffeine'
 
-const [caffeineData] = data
+const shutdownAbortController = new AbortController()
 
-const caffeineManager = new CaffeineManager({
-  dataPoints: caffeineData.data,
+const metricsManager = new MetricsManager(new Registry(), {
+  signal: shutdownAbortController.signal,
 })
 
-console.log(caffeineManager.getCurrentCaffeineLevel())
+const dietaryCaffeineMetricManager = new DietaryCaffeineMetricManager(
+  metricsManager,
+)
+
+Bun.serve({
+  port: process.env.PORT || 8004,
+  fetch: async (req) => {
+    const url = new URL(req.url)
+
+    if (url.pathname === '/metrics') {
+      return new Response(await metricsManager.getRegistry().metrics())
+    }
+
+    return new Response('Not found', { status: 404 })
+  },
+})
+
+process.on('SIGINT', () => {
+  shutdownAbortController.abort()
+  process.exit(0)
+})
