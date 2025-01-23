@@ -1,5 +1,6 @@
 {
   "name": "health-exporters",
+  "license": "MIT",
   "module": "src/main.ts",
   "type": "module",
   "devDependencies": {
