@@ -3,6 +3,7 @@ import { Counter } from 'prom-client'
 
 import { CaffeineCalculator } from '../CaffeineCalculator'
 import type MetricsManager from '../MetricsManager'
+import type { TDataPoint } from '../schema'
 
 export default class DietaryCaffeineMetricManager {
   #metric = new Counter({
@@ -52,5 +53,15 @@ export default class DietaryCaffeineMetricManager {
       { source: 'calculation' },
       this.#caffeineManager.getCurrentCaffeineLevel(),
     )
+  }
+
+  addDataPoints(dataPoints: TDataPoint[]) {
+    const added = this.#caffeineManager.addDataPoints(dataPoints)
+
+    if (added > 0) {
+      this.#update()
+    }
+
+    return added
   }
 }

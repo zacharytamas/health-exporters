@@ -43,10 +43,25 @@ export class CaffeineCalculator {
     return adjusted_qty
   }
 
+  /**
+   * Add new caffeine ingestion data points.
+   *
+   * @param dataPoints - The data points to add.
+   * @returns The number of data points which were not already included.
+   */
   addDataPoints(dataPoints: TDataPoint[]) {
+    let count = 0
+
     for (const dataPoint of dataPoints) {
+      if (this.#data.has(dataPoint.date)) {
+        continue
+      }
+
       this.#data.set(dataPoint.date, dataPoint)
+      count++
     }
+
+    return count
   }
 
   getCurrentCaffeineLevel(now = this.#now()): number {
