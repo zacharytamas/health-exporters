@@ -7,6 +7,7 @@ const CAFFEINE_HALF_LIFE_MS = ms('4h')
 const CAFFEINE_DELAY = ms('1h')
 /** Caffeine consumption whose half-life adjusted value is less than this will be removed */
 const CLEANUP_THRESHOLD = 1
+const MAX_QTY = 200
 
 type NowFunction = () => number
 
@@ -33,7 +34,7 @@ export class CaffeineCalculator {
     // have the whole caffeine amount in my bloodstream. This is a simplified
     // approach which spreads out the impact of the new caffeine over the course
     // of `CAFFEINE_DELAY` which softens the spike on the current value of caffeine.
-    if (ago > CAFFEINE_DELAY) {
+    if (ago < CAFFEINE_DELAY) {
       adjusted_qty = Math.max(
         CLEANUP_THRESHOLD,
         withHalfLife * (ago / CAFFEINE_DELAY),
@@ -53,12 +54,21 @@ export class CaffeineCalculator {
     let count = 0
 
     for (const dataPoint of dataPoints) {
-      if (this.#data.has(dataPoint.date)) {
+      if (dataPoint.qty > MAX_QTY) {
+        // NOTE: Annoying hack here because sometimes WaterLlama creates duplicate entries and then
+        // Auto Health Export handles this by just summing them all that share a timestamp. This
+        // results in, from our perspective, not duplicate data points but one very large data point.
+        // I've arbitrarily decided that if the data point is above this amount, it must be one of
+        // these cases and so we'll ignore it. Eventually WaterLlama fixes the data itself and so
+        // later it will be corrected.
         continue
       }
 
+      if (!this.#data.has(dataPoint.date)) {
+        count++
+      }
+
       this.#data.set(dataPoint.date, dataPoint)
-      count++
     }
 
     return count
