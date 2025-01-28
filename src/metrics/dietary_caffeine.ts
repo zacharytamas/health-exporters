@@ -12,7 +12,7 @@ export default class DietaryCaffeineMetricManager {
     labelNames: ['source'],
   })
 
-  #caffeineManager = new CaffeineCalculator({
+  #caffeineCalculator = new CaffeineCalculator({
     dataPoints: [],
     nowFunction: Date.now,
   })
@@ -51,12 +51,12 @@ export default class DietaryCaffeineMetricManager {
     this.#reset()
     this.#metric.inc(
       { source: 'calculation' },
-      this.#caffeineManager.getCurrentCaffeineLevel(),
+      this.#caffeineCalculator.getCurrentCaffeineLevel(),
     )
   }
 
   addDataPoints(dataPoints: TDataPoint[]) {
-    const added = this.#caffeineManager.addDataPoints(dataPoints)
+    const added = this.#caffeineCalculator.addDataPoints(dataPoints)
 
     if (added > 0) {
       this.#update()
