@@ -44,6 +44,16 @@ export class CaffeineCalculator {
     return adjusted_qty
   }
 
+  getDataPoints() {
+    const now = this.#now()
+
+    return Array.from(this.#data.values()).map((dp) => ({
+      ...dp,
+      ago: now - new Date(dp.date).getTime(),
+      adjusted_qty: this.#currentValue(dp, now),
+    }))
+  }
+
   /**
    * Add new caffeine ingestion data points.
    *

@@ -64,4 +64,8 @@ export default class DietaryCaffeineMetricManager {
 
     return added
   }
+
+  getDataPoints() {
+    return this.#caffeineCalculator.getDataPoints()
+  }
 }

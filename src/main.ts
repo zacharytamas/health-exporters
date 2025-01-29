@@ -25,6 +25,12 @@ Bun.serve({
       return new Response(await metricsManager.getRegistry().metrics())
     }
 
+    if (requestPath === 'GET /explain/dietary_caffeine') {
+      const dataPoints = dietaryCaffeineMetricManager.getDataPoints()
+      console.table(dataPoints)
+      return new Response(JSON.stringify(dataPoints, null, 2), { status: 200 })
+    }
+
     if (requestPath === 'POST /ingest/auto_health_export') {
       const body = await req.json()
       try {
