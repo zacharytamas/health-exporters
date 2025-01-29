@@ -1,3 +1,4 @@
+import { type DateValues, addDays, isBefore, set } from 'date-fns'
 import ms from 'ms'
 
 import type { TDataPoint } from './schema'
@@ -8,6 +9,7 @@ const CAFFEINE_DELAY = ms('1h')
 /** Caffeine consumption whose half-life adjusted value is less than this will be removed */
 const CLEANUP_THRESHOLD = 1
 const MAX_QTY = 200
+const BEDTIME: DateValues = { hours: 22, minutes: 0 }
 
 type NowFunction = () => number
 
@@ -19,12 +21,25 @@ export class CaffeineCalculator {
     dataPoints = [],
     nowFunction = () => Date.now(),
   }: { dataPoints?: TDataPoint[]; nowFunction?: NowFunction } = {}) {
-    this.addDataPoints(dataPoints)
     this.#now = nowFunction
+    this.addDataPoints(dataPoints)
   }
 
-  #currentValue(dp: TDataPoint, now: number): number {
-    const ago = now - new Date(dp.date).getTime()
+  #nextBedtime(now = this.#now()) {
+    const nowDate = new Date(now)
+    let bedtime = set(nowDate, BEDTIME)
+
+    // If "bedtime" today is actually before the current time (i.e. it's after bedtime), then the
+    // "next bedtime" is actually tomorrow, so we add a day to the bedtime date.
+    if (isBefore(bedtime, nowDate)) {
+      bedtime = addDays(bedtime, 1)
+    }
+
+    return bedtime
+  }
+
+  #valueAtTime(dp: TDataPoint, time: number): number {
+    const ago = time - new Date(dp.date).getTime()
     const withHalfLife = dp.qty * 0.5 ** (ago / CAFFEINE_HALF_LIFE_MS)
 
     let adjusted_qty = withHalfLife
@@ -44,13 +59,24 @@ export class CaffeineCalculator {
     return adjusted_qty
   }
 
+  #cleanup() {
+    const now = this.#now()
+
+    for (const dp of this.#data.values()) {
+      if (this.#valueAtTime(dp, now) < CLEANUP_THRESHOLD) {
+        // If the value is less than the cleanup threshold, we can remove it for memory savings and to avoid calculating again.
+        this.#data.delete(dp.date)
+      }
+    }
+  }
+
   getDataPoints() {
     const now = this.#now()
 
     return Array.from(this.#data.values()).map((dp) => ({
       ...dp,
       ago: now - new Date(dp.date).getTime(),
-      adjusted_qty: this.#currentValue(dp, now),
+      adjusted_qty: this.#valueAtTime(dp, now),
     }))
   }
 
@@ -81,21 +107,22 @@ export class CaffeineCalculator {
       this.#data.set(dataPoint.date, dataPoint)
     }
 
+    this.#cleanup()
+
     return count
   }
 
-  getCurrentCaffeineLevel(now = this.#now()): number {
+  getCaffeineLevelAtTime(time: number): number {
     return Array.from(this.#data.values())
-      .map((dp) => {
-        const adjusted_qty = this.#currentValue(dp, now)
-
-        if (adjusted_qty < CLEANUP_THRESHOLD) {
-          // If the value is less than the cleanup threshold, we can remove it for memory savings and to avoid calculating again.
-          this.#data.delete(dp.date)
-        }
-
-        return { ...dp, adjusted_qty }
-      })
+      .map((dp) => ({ ...dp, adjusted_qty: this.#valueAtTime(dp, time) }))
       .reduce((acc, curr) => acc + curr.adjusted_qty, 0)
+  }
+
+  getCurrentCaffeineLevel(): number {
+    return this.getCaffeineLevelAtTime(this.#now())
+  }
+
+  getBedtimeCaffeineLevel(): number {
+    return this.getCaffeineLevelAtTime(this.#nextBedtime().getTime())
   }
 }

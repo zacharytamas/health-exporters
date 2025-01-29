@@ -1,14 +1,20 @@
 import { CronJob } from 'cron'
-import { Counter } from 'prom-client'
+import { Gauge } from 'prom-client'
 
 import { CaffeineCalculator } from '../CaffeineCalculator'
 import type MetricsManager from '../MetricsManager'
 import type { TDataPoint } from '../schema'
 
 export default class DietaryCaffeineMetricManager {
-  #metric = new Counter({
+  #instantaneousMetric = new Gauge({
     name: 'health_dietary_caffeine',
     help: 'The current estimated dietary caffeine level in my body, in mg.',
+    labelNames: ['source'],
+  })
+
+  #bedtimeProjectionMetric = new Gauge({
+    name: 'health_dietary_caffeine_bedtime_projection',
+    help: 'The current projected amount of caffeine in my body at the next bedtime, in mg.',
     labelNames: ['source'],
   })
 
@@ -19,7 +25,14 @@ export default class DietaryCaffeineMetricManager {
 
   constructor(private readonly metricsManager: MetricsManager) {
     this.#reset()
-    metricsManager.registerMetric('health_dietary_caffeine', this.#metric)
+    metricsManager.registerMetric(
+      'health_dietary_caffeine',
+      this.#instantaneousMetric,
+    )
+    metricsManager.registerMetric(
+      'health_dietary_caffeine_bedtime_projection',
+      this.#bedtimeProjectionMetric,
+    )
 
     if (!this.metricsManager.getShutdownSignal().aborted) {
       const updateJob = CronJob.from({
@@ -35,15 +48,21 @@ export default class DietaryCaffeineMetricManager {
   }
 
   #reset() {
-    this.#metric.reset()
-    this.#metric.inc({ source: 'calculation' }, 0)
+    this.#instantaneousMetric.reset()
+    this.#instantaneousMetric.inc({ source: 'calculation' }, 0)
+    this.#bedtimeProjectionMetric.reset()
+    this.#bedtimeProjectionMetric.inc({ source: 'calculation' }, 0)
   }
 
   #update() {
     this.#reset()
-    this.#metric.inc(
+    this.#instantaneousMetric.inc(
       { source: 'calculation' },
       this.#caffeineCalculator.getCurrentCaffeineLevel(),
+    )
+    this.#bedtimeProjectionMetric.inc(
+      { source: 'calculation' },
+      this.#caffeineCalculator.getBedtimeCaffeineLevel(),
     )
   }
 
