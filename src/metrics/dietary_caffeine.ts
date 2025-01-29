@@ -22,13 +22,6 @@ export default class DietaryCaffeineMetricManager {
     metricsManager.registerMetric('health_dietary_caffeine', this.#metric)
 
     if (!this.metricsManager.getShutdownSignal().aborted) {
-      const resetJob = CronJob.from({
-        cronTime: '0 0 * * *', // Every day at midnight
-        onTick: () => this.#reset(),
-        start: true,
-        timeZone: 'America/New_York',
-      })
-
       const updateJob = CronJob.from({
         cronTime: '*/1 * * * *', // Every minute
         start: true,
@@ -36,7 +29,6 @@ export default class DietaryCaffeineMetricManager {
       })
 
       this.metricsManager.getShutdownSignal().addEventListener('abort', () => {
-        resetJob.stop()
         updateJob.stop()
       })
     }
