@@ -2,7 +2,7 @@ import z from 'zod'
 
 export const dataPointSchema = z.object({
   date: z.string(),
-  source: z.string(),
+  source: z.string().optional(),
   qty: z.number(),
 })
 
