@@ -1,5 +1,3 @@
-import { Context, Layer } from 'effect'
-
 type NowFunction = () => number
 
 type TDataPoint = {
@@ -8,7 +6,7 @@ type TDataPoint = {
 }
 
 type TDecayingValueCalculator = {
-  getDataPoints(): TDataPoint[]
+  getDataPoints(): (TDataPoint & { ago: number })[]
   addDataPoints(dataPoints: TDataPoint[]): TDataPoint[]
   getValueAtTime(time: number): number
   getCurrentValue(): number
@@ -38,46 +36,49 @@ export const createDecayingValueCalculator = ({
       _dataPoints.set(dp.date, dp)
     }
 
-    cleanup()
-
     return newDataPoints
   }
 
-  function getDataPoints() {
+  function getDataPoints(): (TDataPoint & { ago: number })[] {
     const now = nowFunction()
+
+    cleanup(now)
 
     return Array.from(_dataPoints.values()).map((dp) => ({
       ...dp,
       ago: now - new Date(dp.date).getTime(),
-      adjusted_qty: valueAtTime(dp, now),
     }))
   }
 
-  function cleanup() {
-    const now = nowFunction()
-
+  function cleanup(now = nowFunction()) {
     for (const dp of _dataPoints.values()) {
-      if (valueAtTime(dp, now) < 1) {
+      if (new Date(dp.date).getTime() < now - halfLife * 10) {
         _dataPoints.delete(dp.date)
       }
     }
   }
 
   function valueAtTime(dp: TDataPoint, time: number): number {
-    const ago = time - new Date(dp.date).getTime()
-    const withHalfLife = dp.value * 0.5 ** (ago / halfLife)
+    const age = time - new Date(dp.date).getTime()
+
+    if (age < 0) {
+      // If the data point is in the future, it has no value at this time.
+      return 0
+    }
+
+    const withHalfLife = dp.value * 0.5 ** (age / halfLife)
 
     let adjusted_qty = withHalfLife
 
-    if (ago < ingestionDelay) {
-      adjusted_qty = Math.max(1, withHalfLife * (ago / ingestionDelay))
+    if (age < ingestionDelay) {
+      adjusted_qty = Math.max(1, withHalfLife * (age / ingestionDelay))
     }
 
     return adjusted_qty
   }
 
   function getValueAtTime(time: number): number {
-    return Array.from(_dataPoints.values())
+    return getDataPoints()
       .map((dp) => ({ ...dp, adjusted_qty: valueAtTime(dp, time) }))
       .reduce((acc, curr) => acc + curr.adjusted_qty, 0)
   }

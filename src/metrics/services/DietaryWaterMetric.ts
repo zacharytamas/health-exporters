@@ -7,6 +7,8 @@ import type { VMDataPoint } from '../../victoriaMetrics'
 import { IntradayData } from './IntradayData'
 import { VictoriaMetricsService } from './VictoriaMetrics'
 
+const TICK_INTERVAL_STRING = '1 minute'
+
 export class DietaryWaterMetric extends Context.Tag('DietaryWaterMetricService')<
   DietaryWaterMetric,
   { start(): void; stop(): void }
@@ -19,15 +21,15 @@ export const DietaryWaterMetricLive = Layer.effect(
     const victoriaMetrics = yield* VictoriaMetricsService
 
     const waterCalculator = createDecayingValueCalculator({
-      halfLife: ms('24h'),
+      halfLife: ms('12h'),
       ingestionDelay: ms('1h'),
     })
 
-    const metricValueForTime = (time: number): VMDataPoint => ({
+    const metricValueForTime = (time: number, kind: 'rolling' | 'total', value?: number): VMDataPoint => ({
       metricName: 'health_dietary_water',
-      value: waterCalculator.getValueAtTime(time),
+      value: value ?? waterCalculator.getValueAtTime(time),
       timestamp: time,
-      labels: { source: 'calculation', kind: 'rolling' },
+      labels: { source: 'calculation', kind },
     })
 
     let ingestFork: RuntimeFiber<void, Error> | undefined
@@ -46,11 +48,7 @@ export const DietaryWaterMetricLive = Layer.effect(
 
         yield* victoriaMetrics
           .sendMetric({ metricName: 'health_dietary_water', data })
-          .pipe(
-            Effect.catchAll((error) =>
-              Effect.log('Failed to send health_dietary_water metric', error),
-            ),
-          )
+          .pipe(Effect.catchAll((error) => Effect.log('Failed to send health_dietary_water metric', error)))
       })
     })
 
@@ -65,27 +63,63 @@ export const DietaryWaterMetricLive = Layer.effect(
         }
 
         ingestFork = Effect.runFork(
-          intradayData.getIntradayStream().pipe(
-            Stream.filter((metrics) => metrics.name === 'dietary_water'),
-            Stream.map((metric) =>
-              (metric.data as HAEGenericMetric['data']).map((d) => ({
-                date: d.date,
-                value: d.qty,
-              })),
+          Stream.run(
+            intradayData.getIntradayStream().pipe(
+              Stream.filter((metrics) => metrics.name === 'dietary_water'),
+              Stream.map((metric) =>
+                (metric.data as HAEGenericMetric['data']).map((d) => ({ date: d.date, value: d.qty })),
+              ),
+              Stream.map((data) => {
+                const newDataPoints = waterCalculator.addDataPoints(data)
+                const dataPoints: VMDataPoint[] = []
+
+                if (newDataPoints.length > 0 && newDataPoints.length !== data.length) {
+                  newDataPoints.sort((a, b) => a.date.localeCompare(b.date))
+                  const earliestDate = newDataPoints[0].date
+                  const now = new Date()
+                  now.setSeconds(0, 0)
+
+                  for (let t = new Date(earliestDate).getTime(); t <= now.getTime(); t += ms(TICK_INTERVAL_STRING)) {
+                    const value = metricValueForTime(t, 'rolling')
+                    if (value.value !== 0) {
+                      dataPoints.push(value)
+                    }
+                  }
+                }
+
+                return []
+                // return dataPoints
+              }),
             ),
-            Stream.runForEach((data) => {
-              waterCalculator.addDataPoints(data)
-              return Effect.void
-            }),
+            sendSink,
           ),
         )
 
         sendFork = Effect.runFork(
           Stream.run(
-            Stream.tick('1 minute').pipe(
+            Stream.tick(TICK_INTERVAL_STRING).pipe(
               Stream.map(() => {
-                const value = metricValueForTime(Date.now())
-                return value.value !== 0 ? [value] : []
+                const now = new Date()
+                now.setSeconds(0, 0)
+                const dataPoints: VMDataPoint[] = []
+
+                if (waterCalculator.getDataPoints().length > 0) {
+                  dataPoints.push(metricValueForTime(now.getTime(), 'rolling'))
+
+                  // Update the 24hr total. This is the total of all water ingestion data points from the past 24 hours.
+                  dataPoints.push(
+                    metricValueForTime(
+                      now.getTime(),
+                      'total',
+                      waterCalculator
+                        .getDataPoints()
+                        .filter((d) => new Date(d.date).getTime() > now.getTime() - ms('24h'))
+                        .reduce((acc, d) => acc + d.value, 0),
+                    ),
+                  )
+                }
+
+                return dataPoints
               }),
             ),
             sendSink,
