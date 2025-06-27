@@ -1,61 +1,24 @@
-import { Effect } from 'effect'
+import { BaseMetricCollector } from './BaseMetricCollector'
+import { CaffeineMetricCollector } from './metrics/CaffeineMetricCollector'
+import { WaterMetricCollector } from './metrics/WaterMetricCollector'
+import { heartRateProcessor, stepCountProcessor, walkingRunningDistanceProcessor } from './metrics/processors'
 
-import {
-  DietaryCaffeineMetricService,
-  DietaryCaffeineMetricServiceLayer,
-} from './metrics/services/DietaryCaffeineMetric'
-import {
-  DietaryWaterMetric,
-  DietaryWaterMetricLive,
-} from './metrics/services/DietaryWaterMetric'
-import {
-  HeartRateMetric,
-  HeartRateMetricLive,
-} from './metrics/services/HeartRateMetric'
-import { IntradayDataLive } from './metrics/services/IntradayData'
-import {
-  StepCountMetric,
-  StepCountMetricLive,
-} from './metrics/services/StepCountMetric'
-import {
-  VictoriaMetricsLive,
-  VictoriaMetricsLog,
-} from './metrics/services/VictoriaMetrics'
-import { WalkingRunningDistanceMetric } from './metrics/walking_running_distance'
+const shutdownController = new AbortController()
 
-const program = Effect.gen(function* () {
-  yield* Effect.logInfo('Starting program')
-  const dietaryCaffeineMetric = yield* DietaryCaffeineMetricService
-  const stepCountMetric = yield* StepCountMetric
-  const dietaryWaterMetric = yield* DietaryWaterMetric
-  const heartRateMetric = yield* HeartRateMetric
+// Create metric collectors with proper types
+new BaseMetricCollector(heartRateProcessor, shutdownController.signal)
+new BaseMetricCollector(stepCountProcessor, shutdownController.signal)
+new BaseMetricCollector(walkingRunningDistanceProcessor, shutdownController.signal)
 
-  yield* Effect.logInfo('Starting metrics')
-  dietaryCaffeineMetric.start()
-  stepCountMetric.start()
-  dietaryWaterMetric.start()
-  heartRateMetric.start()
-  yield* Effect.logInfo('Metrics started')
-})
+// Use specialized collectors that handle complex state calculations
+new CaffeineMetricCollector(shutdownController.signal)
+new WaterMetricCollector(shutdownController.signal)
 
-Effect.runFork(
-  program.pipe(
-    Effect.provide(DietaryCaffeineMetricServiceLayer),
-    Effect.provide(StepCountMetricLive),
-    Effect.provide(DietaryWaterMetricLive),
-    Effect.provide(HeartRateMetricLive),
-    Effect.provide(VictoriaMetricsLive),
-    Effect.provide(IntradayDataLive),
-  ),
-)
+console.log('Started health metrics collectors')
 
-const shutdownAbortController = new AbortController()
-
-const walkingRunningDistanceMetricManager = new WalkingRunningDistanceMetric(
-  shutdownAbortController.signal,
-)
-
+// Graceful shutdown
 process.on('SIGINT', () => {
-  shutdownAbortController.abort()
+  console.log('Shutting down...')
+  shutdownController.abort()
   process.exit(0)
 })

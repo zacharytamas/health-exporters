@@ -1,2 +1,1 @@
-export const toTimestamp = (date: string | Date): number =>
-  new Date(date).getTime()
+export const toTimestamp = (date: string | Date): number => new Date(date).getTime()

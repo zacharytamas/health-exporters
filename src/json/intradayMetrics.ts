@@ -2,13 +2,9 @@ import { Effect, Stream } from 'effect'
 import type { HAEJsonMetric } from './hae-json'
 import { getMetricsForAutomationAndDate } from './metrics'
 
-export const getIntradayMetricsForDate = (
-  date: string,
-): Effect.Effect<Record<string, HAEJsonMetric>, Error> =>
+export const getIntradayMetricsForDate = (date: string): Effect.Effect<Record<string, HAEJsonMetric>, Error> =>
   getMetricsForAutomationAndDate('Intraday', date).pipe(
-    Effect.map((metrics) =>
-      Object.fromEntries(metrics.map((val) => [val.name, val])),
-    ),
+    Effect.map((metrics) => Object.fromEntries(metrics.map((val) => [val.name, val]))),
   )
 
 let intradayStream: Stream.Stream<HAEJsonMetric, Error>

@@ -2,9 +2,7 @@ import { expect, test } from 'bun:test'
 import { dataPointToPrometheus } from './victoriaMetrics'
 
 test('dataPointToPrometheus', () => {
-  expect(
-    dataPointToPrometheus({ metricName: 't', value: 1, timestamp: 500 }),
-  ).toBe('t 1 500')
+  expect(dataPointToPrometheus({ metricName: 't', value: 1, timestamp: 500 })).toBe('t 1 500')
 
   expect(
     dataPointToPrometheus({

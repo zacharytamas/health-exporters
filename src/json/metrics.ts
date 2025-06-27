@@ -6,9 +6,7 @@ import { Effect, pipe } from 'effect'
 import type { ZodError } from 'zod'
 import type { HAEJsonMetric } from './hae-json'
 
-export const getMetricsFromJson = (
-  json: unknown,
-): Effect.Effect<HAEJsonMetric[], ZodError> =>
+export const getMetricsFromJson = (json: unknown): Effect.Effect<HAEJsonMetric[], ZodError> =>
   Effect.try<HAEJsonMetric[], ZodError>({
     try: () =>
       z
@@ -37,8 +35,4 @@ export const getMetricsForAutomationAndDate = (
   automation: string,
   date: string,
 ): Effect.Effect<HAEJsonMetric[], Error> =>
-  pipe(
-    getPathForAutomationAndDate(automation, date),
-    getJsonFromPath,
-    Effect.flatMap(getMetricsFromJson),
-  )
+  pipe(getPathForAutomationAndDate(automation, date), getJsonFromPath, Effect.flatMap(getMetricsFromJson))
